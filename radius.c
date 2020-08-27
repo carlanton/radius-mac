@@ -48,11 +48,11 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
 
 int lookup_attribute(packet *packet, int type, char *value, size_t value_size, size_t *length) {
     int rem = packet->attributes_length;
-    uint8_t *kvp = packet->attributes;
+    uint8_t *p = packet->attributes;
 
     while (rem > 2) {
-        int kvp_type = kvp[0];
-        int kvp_length = kvp[1];
+        uint8_t kvp_type = p[0];
+        uint8_t kvp_length = p[1];
         if (kvp_length > rem) {
             perror("kvp_length > rem");
             break;
@@ -65,7 +65,7 @@ int lookup_attribute(packet *packet, int type, char *value, size_t value_size, s
                 fprintf(stderr, "value too large\n");
                 break;
             }
-            memcpy(value, kvp + 2, kvp_value_length);
+            memcpy(value, p + 2, kvp_value_length);
             value[kvp_value_length] = '\0';
 
             if (length != NULL) {
@@ -76,7 +76,7 @@ int lookup_attribute(packet *packet, int type, char *value, size_t value_size, s
         }
 
         rem -= kvp_length;
-        kvp += kvp_length;
+        p += kvp_length;
     }
 
     return -1; // not found
@@ -89,7 +89,7 @@ int lookup_password(packet *request, char *secret, char *password) {
     char cs[129];
     size_t cs_length = 0;
 
-    e = lookup_attribute(request, 2, cs, sizeof(cs), &cs_length);
+    e = lookup_attribute(request, UserPassword, cs, sizeof(cs), &cs_length);
     if (e < 0) {
         fprintf(stderr, "attribute not found\n");
         return -1;
@@ -105,7 +105,7 @@ int lookup_password(packet *request, char *secret, char *password) {
         MD5Init(&context);
         MD5Update(&context, (uint8_t*) secret, secret_len);
         if (k == 0) {
-            MD5Update(&context, (uint8_t*) request->authenticator, 16);
+            MD5Update(&context, request->authenticator, AUTHENTICATOR_SIZE);
         } else {
             MD5Update(&context, (uint8_t*) &cs[k - 16], 16);
         }

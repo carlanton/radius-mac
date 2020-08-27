@@ -1,8 +1,19 @@
 #ifndef RADIUS_H
 #define RADIUS_H
 
-#define ACCESS_REQUEST 1
-#define ACCESS_ACCEPT 2
+#define AUTHENTICATOR_SIZE 16
+
+enum radius_attribute {
+  UserName = 1,
+  UserPassword = 2,
+};
+
+enum radius_packet_type {
+  AccessRequest = 1,
+  AccessAccept = 2,
+  AccessReject = 3,
+};
+
 
 typedef struct packet {
   uint8_t code;

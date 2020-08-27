@@ -69,7 +69,7 @@ void run(config *cfg) {
             continue;
         }
 
-        if (request.code != ACCESS_REQUEST) {
+        if (request.code != AccessRequest) {
             fprintf(stderr, "unsupported request code %d\n", request.code);
             continue;
         }
@@ -80,7 +80,7 @@ void run(config *cfg) {
             continue;
         }
 
-        e = lookup_attribute(&request, 1, mac, sizeof(mac), NULL);
+        e = lookup_attribute(&request, UserName, mac, sizeof(mac), NULL);
         if (e < 0) {
             fprintf(stderr, "attribute not found\n");
             continue;
@@ -97,10 +97,9 @@ void run(config *cfg) {
             client = &default_client;
         }
 
-        printf("[%s:%d] new client: %s (%s) => vlan-id: %d\n",
+        logf("[%s:%d] new client: %s (%s) => vlan-id: %d",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
                mac, client->description, client->vlan);
-        fflush(stdout);
 
         uint8_t attributes[] = {
             // Attributes
@@ -125,7 +124,7 @@ void run(config *cfg) {
         int response_size = 20 + attributes_size;
 
         packet r = {
-            .code = ACCESS_ACCEPT,
+            .code = AccessAccept,
             .identifier = request.identifier,
             .length = response_size,
             .authenticator = request.authenticator,
