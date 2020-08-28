@@ -21,7 +21,6 @@ typedef struct packet {
   uint16_t length;
   uint8_t *authenticator;
   void *attributes;
-  int attributes_length;
 } packet;
 
 int parse_packet(uint8_t *buffer, size_t length, packet *packet);

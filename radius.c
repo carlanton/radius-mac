@@ -21,7 +21,6 @@ int parse_packet(uint8_t *buffer, size_t length, packet *packet) {
 
     packet->authenticator = &buffer[4];
     packet->attributes = &buffer[20];
-    packet->attributes_length = packet->length - 20;
 
     return 0;
 }
@@ -31,7 +30,7 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
     data[1] = packet->identifier;
     data[2] = packet->length >> 8;
     data[3] = packet->length;
-    memcpy(&data[20], packet->attributes, packet->attributes_length);
+    memcpy(&data[20], packet->attributes, packet->length - 20);
 
     // ResponseAuth =
     //     MD5(Code+ID+Length+RequestAuth+Attributes+Secret)
@@ -47,36 +46,35 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
 }
 
 int lookup_attribute(packet *packet, int type, char *value, size_t value_size, size_t *length) {
-    int rem = packet->attributes_length;
+    int rem = packet->length - 20;
     uint8_t *p = packet->attributes;
 
     while (rem > 2) {
-        uint8_t kvp_type = p[0];
-        uint8_t kvp_length = p[1];
-        if (kvp_length > rem) {
-            perror("kvp_length > rem");
+        uint8_t attr_type = p[0];
+        uint8_t attr_length = p[1];
+        uint8_t attr_value = p[2];
+
+        if (attr_length < 2 || attr_length > rem) {
+            fprintf(stderr, "attr_length < 2 || attr_length > rem\n");
             break;
-        }
-
-        size_t kvp_value_length = kvp_length - 2;
-
-        if (kvp_type == type && kvp_length > 0) {
-            if (kvp_value_length + 1 > value_size) {
+        } else if (attr_type != type) {
+            rem -= attr_length;
+            p += attr_length;
+        } else { // attr_type == type
+            size_t attr_value_length = attr_length - 2;
+            if (attr_value_length + 1 > value_size) {
                 fprintf(stderr, "value too large\n");
-                break;
+                return -1;
             }
-            memcpy(value, p + 2, kvp_value_length);
-            value[kvp_value_length] = '\0';
+            memcpy(value, &attr_value, attr_value_length);
+            value[attr_value_length] = '\0';
 
             if (length != NULL) {
-                *length = kvp_value_length;
+                *length = attr_value_length;
             }
 
             return 0; // found
         }
-
-        rem -= kvp_length;
-        p += kvp_length;
     }
 
     return -1; // not found

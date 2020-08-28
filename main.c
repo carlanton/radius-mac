@@ -13,11 +13,24 @@
 #include "radius.h"
 #include "log.h"
 
+#define VLAN_MAX_LENGTH 4
+
+void send_packet(packet *packet, char *secret,
+                 int sockfd, struct sockaddr_in *client_addr, socklen_t client_addr_len) {
+    uint8_t response[40];
+    if (packet->length > sizeof(response)) {
+        return;
+    }
+    write_packet(packet, secret, response);
+    sendto(sockfd, (const char*) response, packet->length,
+           MSG_CONFIRM, (const struct sockaddr*) client_addr, client_addr_len);
+}
+
 void run(config *cfg) {
     int e;
     int sockfd;
     struct sockaddr_in client_addr = {0};
-    unsigned int client_addr_len = sizeof(client_addr);
+    socklen_t client_addr_len = sizeof(client_addr);
     struct sockaddr_in servaddr = {
         .sin_family = AF_INET,
         .sin_port = htons(cfg->port),
@@ -35,7 +48,6 @@ void run(config *cfg) {
     char password[129];
     char mac[48];
     client_config *client;
-    uint8_t response[40] = {0};
 
     client_config default_client = {
         .description = "default",
@@ -59,6 +71,7 @@ void run(config *cfg) {
     while (1) {
         n = recvfrom(sockfd, buffer, sizeof(buffer), MSG_WAITALL,
                      (struct sockaddr *) &client_addr, &client_addr_len);
+
         if (n <= 0) {
             continue;
         }
@@ -80,15 +93,28 @@ void run(config *cfg) {
             continue;
         }
 
+        packet response = {
+            .identifier = request.identifier,
+            .length = 20,
+            .authenticator = request.authenticator,
+            .attributes = 0,
+        };
+
         e = lookup_attribute(&request, UserName, mac, sizeof(mac), NULL);
         if (e < 0) {
-            fprintf(stderr, "attribute not found\n");
+            logf("[%s:%d] rejecting client: attribute User-Name not found",
+               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+            response.code = AccessReject;
+            send_packet(&response, cfg->secret, sockfd, &client_addr, client_addr_len);
             continue;
         }
 
         e = strcmp(password, mac);
         if (e != 0) {
-            fprintf(stderr, "password mismatch\n");
+            logf("[%s:%d] rejecting client %s: password mismatch",
+               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), mac);
+            response.code = AccessReject;
+            send_packet(&response, cfg->secret, sockfd, &client_addr, client_addr_len);
             continue;
         }
 
@@ -97,45 +123,41 @@ void run(config *cfg) {
             client = &default_client;
         }
 
-        logf("[%s:%d] new client: %s (%s) => vlan-id: %d",
+        logf("[%s:%d] accepting client: %s (%s) => vlan-id: %d",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
                mac, client->description, client->vlan);
 
+        // Attributes required for VLAN assignment
         uint8_t attributes[] = {
-            // Attributes
-            64, 6, 0, 0, 0, 13, // Tunnel-Type (VLAN)
-            65, 6, 0, 0, 0, 6,  // Tunnel-Medium-Type (IEEE802)
+            // Tunnel-Type = VLAN
+            64, 6, 0, 0, 0, 13,
 
-            // Tunnel-Private-Group-ID (vlan id)
-            81, /*[13]*/ 0, 0,
-
-            // vlan id placeholder
-            /*[15]*/ 0, 0, 0, 0, 0
+            // Tunnel-Medium-Type = IEEE 802
+            65, 6, 0, 0, 0, 6,
+           
+            // Tunnel-Private-Group-ID
+            81, 3, 0, 0, 0, 0, 0, 0
+            //  ^     ^
+            //  |      \-- vlan_string
+            //  |
+            //   \-- tpgid_length
         };
 
-        uint8_t *tunnel_private_group_id_length = &attributes[13];
-        char *vlan_attribute = ((char *) &attributes[15]);
+        uint8_t *tpgid_length = &attributes[13];
+        uint8_t *vlan_string = &attributes[15];
 
-        int vlan_length = sprintf(vlan_attribute, "%d", client->vlan);
-        int attr_len = 3 + vlan_length;
-        *tunnel_private_group_id_length = attr_len;
+        int n = snprintf((char*) vlan_string, VLAN_MAX_LENGTH, "%d", client->vlan);
+        if (n >= VLAN_MAX_LENGTH || n < 0) {
+            fprintf(stderr, "invalid vlan for client %s\n", client->mac);
+            continue;
+        }
+        *tpgid_length += n;
 
-        int attributes_size = 6 + 6 + attr_len;
-        int response_size = 20 + attributes_size;
+        response.code = AccessAccept;
+        response.length += 6 + 6 + *tpgid_length;
+        response.attributes = &attributes;
 
-        packet r = {
-            .code = AccessAccept,
-            .identifier = request.identifier,
-            .length = response_size,
-            .authenticator = request.authenticator,
-            .attributes = &attributes,
-            .attributes_length = attributes_size,
-        };
-
-        write_packet(&r, cfg->secret, response);
-
-        sendto(sockfd, (const char*) response, response_size,
-               MSG_CONFIRM, (const struct sockaddr*) &client_addr, client_addr_len);
+        send_packet(&response, cfg->secret, sockfd, &client_addr, client_addr_len);
     }
 }
 
