@@ -11,13 +11,12 @@ typedef struct config {
     char *address;
     int port;
     char *secret;
-    int default_vlan;
     int clients_length;
     client_config *clients;
+    client_config default_client;
 } config;
 
 config *read_config(char *filename);
-
-int lookup_client(char *mac, config *config, client_config **client);
+client_config *get_client(char *mac, config *cfg);
 
 #endif /* CONFIG_H */

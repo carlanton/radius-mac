@@ -32,6 +32,7 @@ config *read_config(char *filename) {
     ssize_t read;
 
     config *cfg = calloc(1, sizeof(config));
+    int default_vlan = 0;
 
     int state = 0;
 
@@ -94,7 +95,7 @@ config *read_config(char *filename) {
                 } else if (strcmp(key, "port") == 0) {
                     cfg->port = atoi(value);
                 } else if (strcmp(key, "default_vlan") == 0) {
-                    cfg->default_vlan = atoi(value);
+                    default_vlan = atoi(value);
                 } else if (strcmp(key, "secret") == 0) {
                     cfg->secret = strdup(value);
                 } else {
@@ -122,7 +123,7 @@ config *read_config(char *filename) {
         fatal("server/port not set");
     }
 
-    if (cfg->default_vlan < 1 || cfg->default_vlan > 4095) {
+    if (default_vlan < 1 || default_vlan > 4095) {
         fatal("server/default_vlan not set or invalid");
     }
 
@@ -143,18 +144,33 @@ config *read_config(char *filename) {
         }
     }
 
+    cfg->default_client = (client_config) {
+      .description = strdup("default"),
+      .mac = strdup(""),
+      .vlan = default_vlan
+    };
+
     return cfg;
 }
 
-int lookup_client(char *mac, config *config, client_config **client) {
-    client_config *c = config->clients;
+client_config *get_client(char *mac, config *cfg) {
+    client_config *c = cfg->clients;
 
-    for (int i = 0; i < config->clients_length; i++, c++) {
+    for (int i = 0; i < cfg->clients_length; i++, c++) {
         if (strcmp(c->mac, mac) == 0) {
-            *client = c;
-            return 0; // found
+            return c;
         }
     }
 
-    return -1; // not found
+    return &cfg->default_client; // fallback
+}
+
+void free_config(config *cfg) {
+
+  (void) cfg;
+  /*
+    client_config *c = cfg->clients;
+    for (int i = 0; i < cfg->clients_length; i++, c++) {
+    }
+    */
 }

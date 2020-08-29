@@ -27,7 +27,6 @@ void send_packet(packet *packet, char *secret,
 }
 
 void run(config *cfg) {
-    int e;
     int sockfd;
     struct sockaddr_in client_addr = {0};
     socklen_t client_addr_len = sizeof client_addr;
@@ -37,8 +36,7 @@ void run(config *cfg) {
         .sin_zero = {0}
     };
 
-    e = inet_pton(AF_INET, cfg->address, &servaddr.sin_addr.s_addr);
-    if (e != 1) {
+    if (inet_pton(AF_INET, cfg->address, &servaddr.sin_addr.s_addr) != 1) {
         fatalf("invalid network address: %s", cfg->address);
     }
 
@@ -47,12 +45,6 @@ void run(config *cfg) {
     packet request;
     char password[129];
     char mac[48];
-    client_config *client;
-
-    client_config default_client = {
-        .description = "default",
-        .vlan = cfg->default_vlan
-    };
 
     // Creating socket file descriptor
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -63,7 +55,7 @@ void run(config *cfg) {
     logf("Starting radius server on %s:%d", cfg->address, cfg->port);
 
     // Bind the socket with the server address
-    if (bind(sockfd, (const struct sockaddr*) &servaddr, sizeof servaddr) < 0){
+    if (bind(sockfd, (const struct sockaddr*) &servaddr, sizeof servaddr) < 0) {
         perror("bind failed");
         exit(1);
     }
@@ -76,8 +68,7 @@ void run(config *cfg) {
             continue;
         }
 
-        e = parse_packet(buffer, n, &request);
-        if (e < 0) {
+        if (parse_packet(buffer, n, &request) < 0) {
             fprintf(stderr, "invalid packet\n");
             continue;
         }
@@ -87,21 +78,19 @@ void run(config *cfg) {
             continue;
         }
 
-        e = lookup_password(&request, cfg->secret, password);
-        if (e < 0) {
+        if (lookup_password(&request, cfg->secret, password) < 0) {
             fprintf(stderr, "password error\n");
             continue;
         }
 
         packet response = {
             .identifier = request.identifier,
-            .length = 20,
+            .length = HEADER_SIZE,
             .authenticator = request.authenticator,
             .attributes = 0,
         };
 
-        e = lookup_attribute(&request, UserName, mac, sizeof mac, NULL);
-        if (e < 0) {
+        if (lookup_attribute(&request, UserName, mac, sizeof mac, NULL) < 0) {
             logf("[%s:%d] rejecting client: attribute User-Name not found",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
             response.code = AccessReject;
@@ -109,8 +98,7 @@ void run(config *cfg) {
             continue;
         }
 
-        e = strcmp(password, mac);
-        if (e != 0) {
+        if (strcmp(password, mac) != 0) {
             logf("[%s:%d] rejecting client %s: password mismatch",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), mac);
             response.code = AccessReject;
@@ -118,10 +106,7 @@ void run(config *cfg) {
             continue;
         }
 
-        e = lookup_client(mac, cfg, &client); 
-        if (e < 0) { // client not found
-            client = &default_client;
-        }
+        client_config *client = get_client(mac, cfg);
 
         logf("[%s:%d] accepting client: %s (%s) => vlan-id: %d",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
@@ -135,7 +120,7 @@ void run(config *cfg) {
             // Tunnel-Medium-Type = IEEE 802
             65, 6, 0, 0, 0, 6,
            
-            // Tunnel-Private-Group-ID
+            // Tunnel-Private-Group-ID = VLAN ID
             81, 3, 0, 0, 0, 0, 0, 0
             //  ^     ^
             //  |      \-- vlan_string
@@ -146,12 +131,12 @@ void run(config *cfg) {
         uint8_t *tpgid_length = &attributes[13];
         uint8_t *vlan_string = &attributes[15];
 
-        int n = snprintf((char*) vlan_string, VLAN_MAX_LENGTH, "%d", client->vlan);
-        if (n >= VLAN_MAX_LENGTH || n < 0) {
-            fprintf(stderr, "invalid vlan for client %s\n", client->mac);
+        int len = snprintf((char*) vlan_string, VLAN_MAX_LENGTH, "%d", client->vlan);
+        if (len >= VLAN_MAX_LENGTH || len < 0) {
+            fprintf(stderr, "invalid vlan for client %s\n", client->description);
             continue;
         }
-        *tpgid_length += n;
+        *tpgid_length += len;
 
         response.code = AccessAccept;
         response.length += 6 + 6 + *tpgid_length;

@@ -48,12 +48,13 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
 int lookup_attribute(packet *packet, int type, char *value, size_t value_size, size_t *length) {
     int rem = packet->length - HEADER_SIZE;
     uint8_t *p = packet->attributes;
-    uint8_t attr_type, attr_length, attr_value;
+    uint8_t attr_type, attr_length;
+    uint8_t *attr_value;
 
     while (rem > 2) {
         attr_type = p[0];
         attr_length = p[1];
-        attr_value = p[2];
+        attr_value = &p[2];
 
         if (attr_length < 2 || attr_length > rem) {
             fprintf(stderr, "attr_length < 2 || attr_length > rem\n");
@@ -66,7 +67,8 @@ int lookup_attribute(packet *packet, int type, char *value, size_t value_size, s
                 fprintf(stderr, "value too large\n");
                 return -1;
             }
-            memcpy(value, &attr_value, attr_value_length);
+
+            memcpy(value, attr_value, attr_value_length);
             value[attr_value_length] = '\0';
 
             if (length != NULL) {
@@ -87,7 +89,7 @@ int lookup_password(packet *request, char *secret, char *password) {
     MD5_CTX context;
     int e;
     char cs[129];
-    size_t cs_length = 0;
+    size_t cs_length;
 
     e = lookup_attribute(request, UserPassword, cs, sizeof cs, &cs_length);
     if (e < 0) {
@@ -109,7 +111,7 @@ int lookup_password(packet *request, char *secret, char *password) {
         } else {
             MD5Update(&context, (uint8_t*) &cs[k - 16], 16);
         }
-        MD5Final(&b[0], &context); // TODO type ?
+        MD5Final(&b[0], &context);
 
         for (int j = 0; j < 16; j++) {
             password[k + j] = b[j] ^ cs[k + j];

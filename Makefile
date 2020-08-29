@@ -1,6 +1,6 @@
 TARGET = radius-mac
 CC = gcc
-CFLAGS = -Wall -Werror -Wextra -Wpedantic
+CFLAGS = -g -Wall -Werror -Wextra -Wpedantic
 
 .PHONY: default all clean
 
