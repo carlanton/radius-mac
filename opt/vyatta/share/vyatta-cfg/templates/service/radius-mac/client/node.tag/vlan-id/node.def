@@ -1,0 +1,3 @@
+type: u32
+help: VLAN ID
+val_help: u32:1-4094; VLAN ID

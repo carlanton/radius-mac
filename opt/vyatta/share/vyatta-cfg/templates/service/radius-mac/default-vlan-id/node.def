@@ -1,0 +1,4 @@
+type: u32
+help: Default client VLAN
+
+val_help: u32:1-4094; VLAN ID

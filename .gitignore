@@ -50,7 +50,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-radius-mac
 src/radius-mac
 src/radius-mac.mipsel
 radius-mac.mipsel

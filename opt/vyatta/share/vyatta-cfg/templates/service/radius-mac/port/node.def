@@ -1,0 +1,5 @@
+type: u32
+help: Local port number to accept connections
+
+syntax:expression: $VAR(@) > 0 && $VAR(@) < 65536;
+                   "Port must be between 1 and 65535"

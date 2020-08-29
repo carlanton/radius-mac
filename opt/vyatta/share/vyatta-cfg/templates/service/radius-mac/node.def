@@ -1,0 +1,5 @@
+help: RADIUS MAC server
+
+delete: sudo /opt/vyatta/sbin/ubnt-radius-mac.pl --delete
+
+end: if [ "$COMMIT_ACTION" != DELETE ]; then sudo /opt/vyatta/sbin/ubnt-radius-mac.pl --update; fi
