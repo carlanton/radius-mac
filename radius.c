@@ -7,7 +7,7 @@
 #include "md5.h"
 
 int parse_packet(uint8_t *buffer, size_t length, packet *packet) {
-    if (length < 20) { // minimum packet size
+    if (length < HEADER_SIZE) { // minimum packet size
         return -1;
     }
 
@@ -15,7 +15,7 @@ int parse_packet(uint8_t *buffer, size_t length, packet *packet) {
     packet->identifier = buffer[1];
     packet->length = (buffer[2] << 8) + buffer[3];
 
-    if (packet->length > 4096 || packet->length > length) {
+    if (packet->length < HEADER_SIZE || packet->length > 4096 || packet->length > length) {
         return -1;
     }
 
@@ -30,15 +30,15 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
     data[1] = packet->identifier;
     data[2] = packet->length >> 8;
     data[3] = packet->length;
-    memcpy(&data[20], packet->attributes, packet->length - 20);
+    memcpy(&data[20], packet->attributes, packet->length - HEADER_SIZE);
 
     // ResponseAuth =
     //     MD5(Code+ID+Length+RequestAuth+Attributes+Secret)
     MD5_CTX context;
     MD5Init(&context);
     MD5Update(&context, (uint8_t*) data, 4); // Code+ID+Length
-    MD5Update(&context, (uint8_t*) packet->authenticator, 16);
-    MD5Update(&context, (uint8_t*) &data[20], data[3] - 20);
+    MD5Update(&context, (uint8_t*) packet->authenticator, AUTHENTICATOR_SIZE);
+    MD5Update(&context, (uint8_t*) &data[20], packet->length - HEADER_SIZE);
     MD5Update(&context, (uint8_t*) secret, strlen(secret));
     MD5Final(&data[4], &context);
 
@@ -46,21 +46,21 @@ int write_packet(packet *packet, char *secret, uint8_t *data) {
 }
 
 int lookup_attribute(packet *packet, int type, char *value, size_t value_size, size_t *length) {
-    int rem = packet->length - 20;
+    int rem = packet->length - HEADER_SIZE;
     uint8_t *p = packet->attributes;
+    uint8_t attr_type, attr_length, attr_value;
 
     while (rem > 2) {
-        uint8_t attr_type = p[0];
-        uint8_t attr_length = p[1];
-        uint8_t attr_value = p[2];
+        attr_type = p[0];
+        attr_length = p[1];
+        attr_value = p[2];
 
         if (attr_length < 2 || attr_length > rem) {
             fprintf(stderr, "attr_length < 2 || attr_length > rem\n");
-            break;
-        } else if (attr_type != type) {
-            rem -= attr_length;
-            p += attr_length;
-        } else { // attr_type == type
+            return -1;
+        }
+        
+        if (attr_type == type) {
             size_t attr_value_length = attr_length - 2;
             if (attr_value_length + 1 > value_size) {
                 fprintf(stderr, "value too large\n");
@@ -72,9 +72,11 @@ int lookup_attribute(packet *packet, int type, char *value, size_t value_size, s
             if (length != NULL) {
                 *length = attr_value_length;
             }
-
             return 0; // found
         }
+
+        rem -= attr_length;
+        p += attr_length;
     }
 
     return -1; // not found
@@ -87,7 +89,7 @@ int lookup_password(packet *request, char *secret, char *password) {
     char cs[129];
     size_t cs_length = 0;
 
-    e = lookup_attribute(request, UserPassword, cs, sizeof(cs), &cs_length);
+    e = lookup_attribute(request, UserPassword, cs, sizeof cs, &cs_length);
     if (e < 0) {
         fprintf(stderr, "attribute not found\n");
         return -1;

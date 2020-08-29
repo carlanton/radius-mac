@@ -1,6 +1,7 @@
 #ifndef RADIUS_H
 #define RADIUS_H
 
+#define HEADER_SIZE 20
 #define AUTHENTICATOR_SIZE 16
 
 enum radius_attribute {

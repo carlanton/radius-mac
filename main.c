@@ -18,7 +18,7 @@
 void send_packet(packet *packet, char *secret,
                  int sockfd, struct sockaddr_in *client_addr, socklen_t client_addr_len) {
     uint8_t response[40];
-    if (packet->length > sizeof(response)) {
+    if (packet->length > sizeof response) {
         return;
     }
     write_packet(packet, secret, response);
@@ -30,7 +30,7 @@ void run(config *cfg) {
     int e;
     int sockfd;
     struct sockaddr_in client_addr = {0};
-    socklen_t client_addr_len = sizeof(client_addr);
+    socklen_t client_addr_len = sizeof client_addr;
     struct sockaddr_in servaddr = {
         .sin_family = AF_INET,
         .sin_port = htons(cfg->port),
@@ -63,13 +63,13 @@ void run(config *cfg) {
     logf("Starting radius server on %s:%d", cfg->address, cfg->port);
 
     // Bind the socket with the server address
-    if (bind(sockfd, (const struct sockaddr*) &servaddr, sizeof(servaddr)) < 0){
+    if (bind(sockfd, (const struct sockaddr*) &servaddr, sizeof servaddr) < 0){
         perror("bind failed");
         exit(1);
     }
 
     while (1) {
-        n = recvfrom(sockfd, buffer, sizeof(buffer), MSG_WAITALL,
+        n = recvfrom(sockfd, buffer, sizeof buffer, MSG_WAITALL,
                      (struct sockaddr *) &client_addr, &client_addr_len);
 
         if (n <= 0) {
@@ -100,7 +100,7 @@ void run(config *cfg) {
             .attributes = 0,
         };
 
-        e = lookup_attribute(&request, UserName, mac, sizeof(mac), NULL);
+        e = lookup_attribute(&request, UserName, mac, sizeof mac, NULL);
         if (e < 0) {
             logf("[%s:%d] rejecting client: attribute User-Name not found",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
