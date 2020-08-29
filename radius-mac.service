@@ -1,0 +1,12 @@
+[Unit]
+Description=radius mac server
+After=network.target
+ConditionPathExists=/etc/radius-mac.ini
+
+[Service]
+ExecStart=/usr/bin/radius-mac -c /etc/radius-mac.ini
+Restart=on-failure
+RestartSec=60s
+
+[Install]
+WantedBy=multi-user.target
