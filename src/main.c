@@ -15,6 +15,10 @@
 
 #define VLAN_MAX_LENGTH 4
 
+#ifndef MSG_CONFIRM
+#define MSG_CONFIRM 0
+#endif
+
 void send_packet(packet *packet, char *secret,
                  int sockfd, struct sockaddr_in *client_addr, socklen_t client_addr_len) {
     uint8_t response[40];
