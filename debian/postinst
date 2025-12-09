@@ -1,0 +1,7 @@
+# refresh 
+systemctl daemon-reload
+# start immediately
+systemctl start radius-mac.service
+# enable at boot
+systemctl enable radius-mac.service
+

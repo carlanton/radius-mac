@@ -1,0 +1,11 @@
+FROM debian:stretch-slim
+
+ARG BUILD_ARCH
+
+COPY apt.stretch.sources.list /etc/apt/sources.list
+
+RUN apt-get update && \
+    apt-get -y install \
+    build-essential \
+    g++-${BUILD_ARCH}-linux-gnu
+
